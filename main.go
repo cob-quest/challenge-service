@@ -4,20 +4,21 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
+
 	helmclient "github.com/mittwald/go-helm-client"
 	"helm.sh/helm/v3/pkg/repo"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
+	"sys.io/assignment-service/utils"
 )
 
 func main() {
 
-	////////////////////////////////////////////////////////////////////
-    // Set Configurations
-    ////////////////////////////////////////////////////////////////////
+	// set config path
 	kubeconfigPath := os.Getenv("KUBECONFIG")
 	if kubeconfigPath == "" {
 		kubeconfigPath = fmt.Sprintf("%s/.kube/config", os.Getenv("HOME"))
@@ -29,22 +30,19 @@ func main() {
 		os.Exit(1)
 	}
 
-    ////////////////////////////////////////////////////////////////////
-    // Retrieve Secrets for GitLab to pull images and helm charts (TODO)
-    ////////////////////////////////////////////////////////////////////
+	// TODO: retrieve secrets for gitlab to pull images and helm charts
 
+	// generate ssh keys and convert them into strings
+	pubKey, privKey, err := utils.GenerateRSAKeyPairString()
+	if err != nil {
+		log.Fatal(err)
+	}
 
-    ////////////////////////////////////////////////////////////////////
-    // Create Pub/Pri Keys for ssh (TODO)
-    ////////////////////////////////////////////////////////////////////
+	log.Printf("pub: %s, priv: %s", pubKey, privKey)
 
-    
-
-
-	
 	////////////////////////////////////////////////////////////////////
-    // Create Challenge Deployment
-    ////////////////////////////////////////////////////////////////////
+	// Create Challenge Deployment
+	////////////////////////////////////////////////////////////////////
 
 	//This should be customizable based on the useremail + challengeid
 	var namespace = "challenge"
@@ -69,12 +67,12 @@ func main() {
 
 	// Set the Helm chart repository.
 	chartRepo := repo.Entry{
-		Name:     "challenge",
-        // Hardcoded url might wanna change
-		URL:      "https://gitlab.com/api/v4/projects/51018402/packages/helm/stable",
-        // Hardcoded username
+		Name: "challenge",
+		// Hardcoded url might wanna change
+		URL: "https://gitlab.com/api/v4/projects/51018402/packages/helm/stable",
+		// Hardcoded username
 		Username: "oojingkai10",
-        // Password is Gitlab token
+		// Password is Gitlab token
 		Password: "",
 		// Since helm 3.6.1 it is necessary to pass 'PassCredentialsAll = true'.
 		PassCredentialsAll: true,
@@ -112,11 +110,9 @@ func main() {
 	// Get Pod IP and Port functions
 	////////////////////////////////////////////////////////////////////
 
-
-    // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    // Uncomment below to use In Cluster Config
-    // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
+	// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	// Uncomment below to use In Cluster Config
+	// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 	// Create a Kubernetes client.
 	// config, err := rest.InClusterConfig()
@@ -163,7 +159,6 @@ func main() {
 	fmt.Printf("NodePort port number for the `my-service` Service on the public IP address of the node exposing the pod: %s:%d\n", publicIPAddress, nodePort)
 }
 
-
 ////////////////////////////////////////////////////////////////////
 // Assume same node as the pod
 // temporary solution to get ipaddress need a better way
@@ -190,5 +185,3 @@ func getPublicIPAddress() (string, error) {
 
 	return ipAddress.IP, nil
 }
-
-
