@@ -7,7 +7,7 @@ import (
 	"encoding/pem"
 )
 
-const BIT_SIZE = 4096
+const BIT_SIZE = 2048
 
 func GenerateRSAKeyPairString() (string, string, error) {
 	privKey, pubKey, err := generateRSAKeyPair()

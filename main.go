@@ -13,102 +13,91 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
+	"sys.io/assignment-service/config"
 	"sys.io/assignment-service/utils"
 )
 
 func main() {
 
-	// set config path
-	kubeconfigPath := os.Getenv("KUBECONFIG")
-	if kubeconfigPath == "" {
-		kubeconfigPath = fmt.Sprintf("%s/.kube/config", os.Getenv("HOME"))
-	}
+	// init env
+	config.InitEnv()
 
-	kubeConfig, err := os.ReadFile(kubeconfigPath)
+	// read kubernetes config file
+	kubeConfig, err := os.ReadFile("/home/soonann/.kube/config")
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to read file from kube/config: %v\n", err)
-		os.Exit(1)
+		log.Fatalf("Failed to read file from kube/config: %v\n", err)
 	}
-
-	// TODO: retrieve secrets for gitlab to pull images and helm charts
 
 	// generate ssh keys and convert them into strings
 	pubKey, privKey, err := utils.GenerateRSAKeyPairString()
 	if err != nil {
 		log.Fatal(err)
 	}
-
 	log.Printf("pub: %s, priv: %s", pubKey, privKey)
 
-	////////////////////////////////////////////////////////////////////
-	// Create Challenge Deployment
-	////////////////////////////////////////////////////////////////////
-
-	//This should be customizable based on the useremail + challengeid
+	// create a helm client
 	var namespace = "challenge"
-
-	helmClient, err := helmclient.NewClientFromKubeConf(&helmclient.KubeConfClientOptions{
-		Options: &helmclient.Options{
-			Namespace:        namespace,
-			RepositoryConfig: "",
-			RepositoryCache:  "",
-			Debug:            false,
-			Linting:          false,
-			RegistryConfig:   "",
-			Output:           nil,
+	helmClient, err := helmclient.NewClientFromKubeConf(
+		&helmclient.KubeConfClientOptions{
+			Options: &helmclient.Options{
+				Namespace:        namespace,
+				RepositoryCache:  "/tmp/.helmcache",
+				RepositoryConfig: "/tmp/.helmrepo",
+				Debug:            true,
+				Linting:          true,
+				Output:           nil,
+			},
+			KubeConfig:  kubeConfig,
+			KubeContext: "",
 		},
-		KubeContext: "",
-		KubeConfig:  kubeConfig,
-	})
+	)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to create HelmClient: %v\n", err)
-		os.Exit(1)
+		log.Fatalf("Failed to create HelmClient: %v\n", err)
 	}
 
-	// Set the Helm chart repository.
-	chartRepo := repo.Entry{
-		Name: "challenge",
-		// Hardcoded url might wanna change
-		URL: "https://gitlab.com/api/v4/projects/51018402/packages/helm/stable",
-		// Hardcoded username
-		Username: "oojingkai10",
-		// Password is Gitlab token
-		Password: "",
-		// Since helm 3.6.1 it is necessary to pass 'PassCredentialsAll = true'.
+	// create a repo reference
+	repo := repo.Entry{
+		Name:               config.HELM_REPO_NAME,
+		URL:                config.HELM_REPO_URL,
+		Username:           config.HELM_REPO_USERNAME,
+		Password:           config.HELM_REPO_PASSWORD,
 		PassCredentialsAll: true,
 	}
 
-	err = helmClient.AddOrUpdateChartRepo(chartRepo)
+	// add the chart repo reference
+	err = helmClient.AddOrUpdateChartRepo(repo)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to create HelmClient: %v\n", err)
-		os.Exit(1)
+		log.Fatalf("Failed to create HelmClient: %v\n", err)
 	}
 
+	// list all the deployed releases
+	releases, err := helmClient.ListDeployedReleases()
+	if err != nil {
+		log.Fatalf("Failed to list deployed releases %v\n", err)
+	}
+	log.Printf("releases are: %v", releases[0].Name)
+
+	// specify the challenge chart
 	chartSpec := helmclient.ChartSpec{
 		ReleaseName:     "challenge",
-		ChartName:       "challenge/challenge",
+		ChartName:       "stable/challenge",
 		Namespace:       namespace,
 		CreateNamespace: true,
-		// UpgradeCRDs: true,
-		// Wait:        true,
+		GenerateName:    true,
 		ValuesYaml: `
-    image:
-        repository: clitest
-        pullPolicy: Never
-        tag: latest
-    authorized_keys: <Public Key Goes here>
-    `,
+image:
+  repository: clitest
+  pullPolicy: Never
+  tag: latest
+authorized_keys: "%s"`,
 	}
 
-	// Install a chart release.
-	// Note that helmclient.Options.Namespace should ideally match the namespace in chartSpec.Namespace.
+	// install or upgrade a chart release
 	if _, err := helmClient.InstallOrUpgradeChart(context.Background(), &chartSpec, nil); err != nil {
 		panic(err)
 	}
 
-	////////////////////////////////////////////////////////////////////
-	// Get Pod IP and Port functions
-	////////////////////////////////////////////////////////////////////
+	// get pod IP and port functions
 
 	// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 	// Uncomment below to use In Cluster Config
@@ -121,7 +110,7 @@ func main() {
 	//     os.Exit(1)
 	// }
 
-	config, err := clientcmd.BuildConfigFromFlags("", kubeconfigPath)
+	config, err := clientcmd.BuildConfigFromFlags("", config.KUBECONFIG)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to create Kubernetes client configuration: %v\n", err)
 		os.Exit(1)
