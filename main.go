@@ -23,7 +23,7 @@ func main() {
 	config.InitEnv()
 
 	// read kubernetes config file
-	kubeConfig, err := os.ReadFile("/home/soonann/.kube/config")
+	kubeConfig, err := os.ReadFile(config.KUBECONFIG)
 	if err != nil {
 		log.Fatalf("Failed to read file from kube/config: %v\n", err)
 	}
@@ -80,7 +80,7 @@ func main() {
 	// specify the challenge chart
 	chartSpec := helmclient.ChartSpec{
 		ReleaseName:     "challenge",
-		ChartName:       "stable/challenge",
+		ChartName:       fmt.Sprintf("%s/%s", config.HELM_REPO_NAME, config.HELM_CHART_NAME),
 		Namespace:       namespace,
 		CreateNamespace: true,
 		GenerateName:    true,
