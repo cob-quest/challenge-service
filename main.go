@@ -29,7 +29,7 @@ func main() {
 	}
 
 	// generate ssh keys and convert them into strings
-	pubKey, privKey, err := utils.GenerateRSAKeyPairString()
+	pubKey, privKey, err := utils.MakeSSHKeyPair()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -71,25 +71,34 @@ func main() {
 	}
 
 	// list all the deployed releases
-	releases, err := helmClient.ListDeployedReleases()
-	if err != nil {
-		log.Fatalf("Failed to list deployed releases %v\n", err)
-	}
-	log.Printf("releases are: %v", releases[0].Name)
+	// releases, err := helmClient.ListDeployedReleases()
+	// if err != nil {
+	// 	log.Fatalf("Failed to list deployed releases %v\n", err)
+	// }
+	// log.Printf("releases are: %v", releases[0].Name)
+
+
+	// Information from rabbitmq
+	repository := "clitest"
+	tag := "latest"
+	ReleaseName := "challenge"
+
 
 	// specify the challenge chart
 	chartSpec := helmclient.ChartSpec{
-		ReleaseName:     "challenge",
+		ReleaseName:     ReleaseName,
 		ChartName:       fmt.Sprintf("%s/%s", config.HELM_REPO_NAME, config.HELM_CHART_NAME),
 		Namespace:       namespace,
 		CreateNamespace: true,
 		GenerateName:    true,
-		ValuesYaml: `
+		ValuesYaml: fmt.Sprintf(`
 image:
-  repository: clitest
+  repository: %s
   pullPolicy: Never
-  tag: latest
-authorized_keys: "%s"`,
+  tag: %s
+imagePullSecrets:
+- name: docker-registry-credentials
+authorized_keys: %s`,repository,tag,pubKey),
 	}
 
 	// install or upgrade a chart release
@@ -130,7 +139,7 @@ authorized_keys: "%s"`,
 	}
 
 	// Get the NodePort port number for the `my-service` Service.
-	service, err := client.CoreV1().Services(namespace).Get(context.Background(), "challenge", v1.GetOptions{
+	service, err := client.CoreV1().Services(namespace).Get(context.Background(), ReleaseName, v1.GetOptions{
 		TypeMeta: v1.TypeMeta{
 			Kind:       "",
 			APIVersion: "",
