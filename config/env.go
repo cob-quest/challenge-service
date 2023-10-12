@@ -21,10 +21,16 @@ var (
 
 func InitEnv() {
 	// loads environment variables
-	err := godotenv.Load()
+	err := godotenv.Load("/etc/.env")
 	if err != nil {
-		log.Fatal("Failed to load .env")
+		log.Printf("Failed to load /etc/.env")
 	}
+
+	err = godotenv.Load(".env")
+	if err != nil {
+		log.Printf("Failed to load .env")
+	}
+
 
 	// env type
 	ENVIRONMENT = os.Getenv("ENVIRONMENT")
