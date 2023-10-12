@@ -3,16 +3,9 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
-	"net/http"
-	"os"
-
-	helmclient "github.com/mittwald/go-helm-client"
-	"helm.sh/helm/v3/pkg/repo"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/clientcmd"
+	amqp "github.com/rabbitmq/amqp091-go"
+	"sys.io/assignment-service/app"
 	"sys.io/assignment-service/config"
 	"sys.io/assignment-service/utils"
 )
@@ -20,166 +13,98 @@ import (
 func main() {
 
 	// init env
+	log.Println("Loadingg .env file")
 	config.InitEnv()
+	log.Println(".env loaded!")
 
-	// read kubernetes config file
-	kubeConfig, err := os.ReadFile(config.KUBECONFIG)
-	if err != nil {
-		log.Fatalf("Failed to read file from kube/config: %v\n", err)
-	}
+	
+	rmq := config.SetupMQ()
+	defer rmq.Conn.Close()
+	defer rmq.Ch.Close()
 
-	// generate ssh keys and convert them into strings
-	pubKey, privKey, err := utils.MakeSSHKeyPair()
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Printf("pub: %s, priv: %s", pubKey, privKey)
-
-	// create a helm client
-	var namespace = "challenge"
-	helmClient, err := helmclient.NewClientFromKubeConf(
-		&helmclient.KubeConfClientOptions{
-			Options: &helmclient.Options{
-				Namespace:        namespace,
-				RepositoryCache:  "/tmp/.helmcache",
-				RepositoryConfig: "/tmp/.helmrepo",
-				Debug:            true,
-				Linting:          true,
-				Output:           nil,
-			},
-			KubeConfig:  kubeConfig,
-			KubeContext: "",
-		},
+	msgs, err := rmq.Ch.Consume(
+		"queue.assignment.toService",    // queue
+		"assignmentService",    // consumer
+		false,      // auto-ack
+		false,     // exclusive
+		false,     // no-local
+		false,     // no-wait
+		nil,       // args
 	)
-	if err != nil {
-		log.Fatalf("Failed to create HelmClient: %v\n", err)
-	}
-
-	// create a repo reference
-	repo := repo.Entry{
-		Name:               config.HELM_REPO_NAME,
-		URL:                config.HELM_REPO_URL,
-		Username:           config.HELM_REPO_USERNAME,
-		Password:           config.HELM_REPO_PASSWORD,
-		PassCredentialsAll: true,
-	}
-
-	// add the chart repo reference
-	err = helmClient.AddOrUpdateChartRepo(repo)
-	if err != nil {
-		log.Fatalf("Failed to create HelmClient: %v\n", err)
-	}
-
-	// list all the deployed releases
-	// releases, err := helmClient.ListDeployedReleases()
-	// if err != nil {
-	// 	log.Fatalf("Failed to list deployed releases %v\n", err)
-	// }
-	// log.Printf("releases are: %v", releases[0].Name)
 
 
-	// Information from rabbitmq
-	repository := "clitest"
-	tag := "latest"
-	ReleaseName := "challenge"
+	utils.FailOnError(err, "Failed to consume messages from queue.assignment.toService")
 
+	var forever chan struct{}
 
-	// specify the challenge chart
-	chartSpec := helmclient.ChartSpec{
-		ReleaseName:     ReleaseName,
-		ChartName:       fmt.Sprintf("%s/%s", config.HELM_REPO_NAME, config.HELM_CHART_NAME),
-		Namespace:       namespace,
-		CreateNamespace: true,
-		GenerateName:    true,
-		ValuesYaml: fmt.Sprintf(`
-image:
-  repository: %s
-  pullPolicy: Never
-  tag: %s
-imagePullSecrets:
-- name: docker-registry-credentials
-authorized_keys: %s`,repository,tag,pubKey),
-	}
+	go func ()  {
+		
+		for msg := range msgs {
+			log.Println("Consuming")
+			log.Printf("Received msg: %s\n", msg.Body)
 
-	// install or upgrade a chart release
-	if _, err := helmClient.InstallOrUpgradeChart(context.Background(), &chartSpec, nil); err != nil {
-		panic(err)
-	}
+			 // Decode the JSON message body.
+			 var data map[string]interface{}
+			 err := json.Unmarshal(msg.Body, &data)
+			 if err != nil {
+				 log.Printf("Failed to decode JSON message body: %s", err)
+				 continue
+			 }
 
-	// get pod IP and port functions
+			 // Retrieve the repository, tag, and release_id from the JSON data.
+			 repository, tag, release_id := data["repository"].(string), data["tag"].(string), data["release_id"].(string)
+	
+			app.CreateChallenge(repository,tag,release_id)
+			if err != nil {
+				log.Printf("Failed to create challenge: %s", err)
+				continue
+			}
 
-	// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-	// Uncomment below to use In Cluster Config
-	// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+			msgBody, err := json.Marshal(map[string]interface{}{
+				"message": "Challenge created successfully.",
+			})
+			if err != nil {
+				log.Printf("Failed to marshal JSON message body: %s", err)
+				continue
+			}
 
-	// Create a Kubernetes client.
-	// config, err := rest.InClusterConfig()
-	// if err != nil {
-	//     fmt.Fprintf(os.Stderr, "Failed to create Kubernetes client: %v\n", err)
-	//     os.Exit(1)
-	// }
+			q, err := rmq.Ch.QueueDeclare(
+				"queue.assignment.FromService", // name
+				true,   // durable
+				false,   // delete when unused
+				false,   // exclusive
+				false,   // no-wait
+				nil,     // arguments
+			)
+			if err != nil {
+				log.Printf("Failed to marshal JSON message body: %s", err)
+				continue
+			}
+			// ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			// defer cancel()
+			
+			err = rmq.Ch.PublishWithContext(context.TODO(),
+				"", // exchange
+				q.Name,                 // routing key
+				false,                           // mandatory
+				false,                           // immediate
+				amqp.Publishing{
+					ContentType: "application/json",
+					Body:        msgBody,
+				},
+			)
+			if err != nil {
+				log.Printf("Failed to publish message to queue.assignment.FromService: %s", err)
+				continue
+			}
 
-	config, err := clientcmd.BuildConfigFromFlags("", config.KUBECONFIG)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to create Kubernetes client configuration: %v\n", err)
-		os.Exit(1)
-	}
+			err = msg.Ack(false)
+			if err != nil {
+				log.Printf("Failed to ack message: %s", err)
+			}
+		}
+	} ()
 
-	client, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to create Kubernetes client: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Get the public IP address of the node exposing the pod.
-	publicIPAddress, err := getPublicIPAddress()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to get public IP address: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Get the NodePort port number for the `my-service` Service.
-	service, err := client.CoreV1().Services(namespace).Get(context.Background(), ReleaseName, v1.GetOptions{
-		TypeMeta: v1.TypeMeta{
-			Kind:       "",
-			APIVersion: "",
-		},
-		ResourceVersion: "",
-	})
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to get Service: %v\n", err)
-		os.Exit(1)
-	}
-
-	nodePort := service.Spec.Ports[0].NodePort
-
-	// Print the NodePort port number.
-	fmt.Printf("NodePort port number for the `my-service` Service on the public IP address of the node exposing the pod: %s:%d\n", publicIPAddress, nodePort)
-}
-
-////////////////////////////////////////////////////////////////////
-// Assume same node as the pod
-// temporary solution to get ipaddress need a better way
-////////////////////////////////////////////////////////////////////
-
-func getPublicIPAddress() (string, error) {
-	// Get the public IP address of the current node.
-	resp, err := http.Get("https://api.ipify.org/?format=json")
-	if err != nil {
-		return "", err
-	}
-
-	defer resp.Body.Close()
-
-	// Decode the JSON response.
-	var ipAddress struct {
-		IP string `json:"ip"`
-	}
-
-	err = json.NewDecoder(resp.Body).Decode(&ipAddress)
-	if err != nil {
-		return "", err
-	}
-
-	return ipAddress.IP, nil
+	log.Printf(" [*] Waiting for messages")
+	<-forever
 }

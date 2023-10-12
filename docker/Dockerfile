@@ -2,20 +2,18 @@ FROM golang:1.20
 
 WORKDIR /app
 
-ENV GIN_MODE=release
-
 ENV CGO_ENABLED 1
 
-COPY go.mod ./
+COPY ./go.mod ./
 
-COPY go.sum ./
+COPY ./go.sum ./
 
 RUN go mod download
 
 COPY . ./
 
-#RUN go build -o /loyalty-application/go-gin-backend
+RUN go build -o /cob/assignment-service
 
-EXPOSE 8080
+# EXPOSE 8080
 
-CMD [ "/loyalty-application/go-gin-backend" ]
+CMD [ "/cob/assignment-service" ]

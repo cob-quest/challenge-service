@@ -7,6 +7,8 @@ require (
 	k8s.io/client-go v0.28.2
 )
 
+require github.com/rabbitmq/amqp091-go v1.9.0 // indirect
+
 require (
 	github.com/AdaLogics/go-fuzz-headers v0.0.0-20230811130428-ced1acdcaa24 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 // indirect
