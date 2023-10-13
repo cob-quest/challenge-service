@@ -1,5 +1,5 @@
 stages:
-  - Build and Push
+  - Release
   - Update Chart
 
 ##############################################################################
@@ -12,26 +12,7 @@ variables:
   CD_MANIFEST_FILE: values.yaml
   APP_NAME: gitops-argocd-deploy
   CHART_FOLDER: helm
-  REGISTRY: $CI_REGISTRY/cs302-2023/g3-team8/project/assignment-service
 
-# ##############################################################################
-# ##                Setup OIDC Assume Role Template                          ##
-# ##############################################################################
-# .assume_role: &assume_role
-#   before_script:
-#     - apk add python3
-#     - pip3 install awscli
-#     - >
-#       export $(printf "AWS_ACCESS_KEY_ID=%s AWS_SECRET_ACCESS_KEY=%s AWS_SESSION_TOKEN=%s"
-#       $(aws sts assume-role-with-web-identity
-#       --role-arn $AWS_ROLE_ARN
-#       --role-session-name "GitLabRunner-${CI_PROJECT_ID}-${CI_PIPELINE_ID}"
-#       --web-identity-token $CI_JOB_JWT_V2
-#       --duration-seconds 3600
-#       --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]'
-#       --output text))
-#     - aws sts get-caller-identity
-#     - $(aws ecr get-login --no-include-email --region eu-west-1)
 
 ##############################################################################
 ##                Setup and Enable SSH                          ##
@@ -46,25 +27,16 @@ variables:
 ##############################################################################
 ##                             Build Image                                 ##
 ##############################################################################
-BuildPush:
+release-image:
+  stage: Release
   image: docker:24.0.2
   services:
     - docker:24.0.2-dind
-  stage: Build and Push
+  before_script:
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
   script:
-    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
-    - docker build --compress -t $REGISTRY:$CI_COMMIT_SHORT_SHA -f ./docker/Dockerfile .  
-    - docker push $REGISTRY:$CI_COMMIT_SHORT_SHA
-
-##############################################################################
-##                       Push to ECR                                       ##
-##############################################################################
-# Push:
-#   stage: Push
-#   script:
-#     - docker pull $ECR_REPO:$CI_COMMIT_SHORT_SHA
-#     - docker tag $ECR_REPO:$CI_COMMIT_SHORT_SHA $ECR_REPO:latest
-#     - docker push $ECR_REPO:latest
+    - docker build --compress -t $CI_REGISTRY_IMAGE/$CI_COMMIT_BRANCH:$CI_COMMIT_SHORT_SHA -f ./docker/Dockerfile .  
+    - docker push $CI_REGISTRY_IMAGE/$CI_COMMIT_BRANCH:$CI_COMMIT_SHORT_SHA
 
 update_chart_manifest:
   stage: Update Chart
@@ -74,7 +46,7 @@ update_chart_manifest:
   only:
     - main
   needs:
-    - BuildPush
+    - release-image
   variables:
     GIT_STRATEGY: none
   retry: 2
