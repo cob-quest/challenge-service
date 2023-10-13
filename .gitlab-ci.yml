@@ -1,7 +1,5 @@
 stages:
-  - Static Analysis
-  - Build
-  - Push
+  - Build and Push
   - Update Chart
 
 ##############################################################################
@@ -47,12 +45,11 @@ variables:
 ##############################################################################
 ##                             Build Image                                 ##
 ##############################################################################
-Build:
+BuildPush:
   image: docker:24.0.2
   services:
     - docker:24.0.2-dind
-  # <<: *assume_role
-  stage: Build
+  stage: Build and Push
   script:
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
     - docker build --compress -t $CI_REGISTRY/group/project/image:$CI_COMMIT_SHORT_SHA .
@@ -61,13 +58,12 @@ Build:
 ##############################################################################
 ##                       Push to ECR                                       ##
 ##############################################################################
-Push:
-  stage: Push
-  <<: *assume_role
-  script:
-    - docker pull $ECR_REPO:$CI_COMMIT_SHORT_SHA
-    - docker tag $ECR_REPO:$CI_COMMIT_SHORT_SHA $ECR_REPO:latest
-    - docker push $ECR_REPO:latest
+# Push:
+#   stage: Push
+#   script:
+#     - docker pull $ECR_REPO:$CI_COMMIT_SHORT_SHA
+#     - docker tag $ECR_REPO:$CI_COMMIT_SHORT_SHA $ECR_REPO:latest
+#     - docker push $ECR_REPO:latest
 
 update_chart_manifest:
   stage: Update Chart
