@@ -6,9 +6,9 @@ COPY . .
 
 RUN go mod download
 
-RUN go build -o assignment
+RUN GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o assignment
 
-FROM alpine:latest
+FROM gcr.io/distroless/base-debian12
 
 WORKDIR /
 
