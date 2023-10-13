@@ -70,7 +70,7 @@ update_chart_manifest:
   only:
     - main
   needs:
-    - Push
+    - BuildPush
   variables:
     GIT_STRATEGY: none
   retry: 2
