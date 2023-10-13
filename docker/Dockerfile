@@ -1,19 +1,17 @@
-FROM golang:1.20
+FROM golang:alpine as build
 
-WORKDIR /app
+WORKDIR /service
 
-ENV CGO_ENABLED 1
-
-COPY ./go.mod ./
-
-COPY ./go.sum ./
+COPY . .
 
 RUN go mod download
 
-COPY . ./
+RUN go build -o assignment
 
-RUN go build -o /cob/assignment-service
+FROM alpine:latest
 
-# EXPOSE 8080
+WORKDIR /
 
-CMD [ "/cob/assignment-service" ]
+COPY --from=build /service/assignment .
+
+CMD [ "./assignment" ]

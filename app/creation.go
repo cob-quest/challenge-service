@@ -17,9 +17,22 @@ import (
 )
 
 func CreateChallenge(repository string, tag string, release_id string) (string, string, int32, error) {
-	kubeConfig, err := os.ReadFile(config.KUBECONFIG)
-	if err != nil {
-		log.Fatalf("Failed to read file from kube/config: %v\n", err)
+	// Create a Kubernetes client.
+	var kconfig *rest.Config
+	var err error
+
+	if config.ENVIRONMENT == "DEV" {
+		kconfig, err = clientcmd.BuildConfigFromFlags("", config.KUBECONFIG)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to create Kubernetes client configuration: %v\n", err)
+			return "", "", 0, err
+		}
+	} else {
+		kconfig, err = rest.InClusterConfig()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to create Kubernetes client: %v\n", err)
+			return "", "", 0, err
+		}
 	}
 
 	// generate ssh keys and convert them into strings
@@ -32,24 +45,57 @@ func CreateChallenge(repository string, tag string, release_id string) (string, 
 
 	// create a helm client
 	var namespace = "challenge"
-	helmClient, err := helmclient.NewClientFromKubeConf(
-		&helmclient.KubeConfClientOptions{
+
+	var helmClient helmclient.Client
+
+	if config.ENVIRONMENT == "DEV" {
+
+		kubeConfig, err := os.ReadFile(config.KUBECONFIG)
+		if err != nil {
+			log.Printf("Failed to read file from kube/config: %v\n", err)
+		}
+
+		helmClient, err = helmclient.NewClientFromKubeConf(
+			&helmclient.KubeConfClientOptions{
+				Options: &helmclient.Options{
+					Namespace:        namespace,
+					RepositoryCache:  "/tmp/.helmcache",
+					RepositoryConfig: "/tmp/.helmrepo",
+					Debug:            true,
+					Linting:          true,
+					Output:           nil,
+				},
+				KubeConfig:  kubeConfig,
+				KubeContext: "",
+			},
+		)
+		if err != nil {
+			log.Fatalf("Failed to create HelmClient: %v\n", err)
+			return "", "", 0, err
+		}
+	} else {
+		opt := &helmclient.RestConfClientOptions{
 			Options: &helmclient.Options{
-				Namespace:        namespace,
+				Namespace:        namespace, // Change this to the namespace you wish the client to operate in.
 				RepositoryCache:  "/tmp/.helmcache",
 				RepositoryConfig: "/tmp/.helmrepo",
 				Debug:            true,
-				Linting:          true,
-				Output:           nil,
+				Linting:          true, // Change this to false if you don't want linting.
+				DebugLog: func(format string, v ...interface{}) {
+					// Change this to your own logger. Default is 'log.Printf(format, v...)'.
+				},
 			},
-			KubeConfig:  kubeConfig,
-			KubeContext: "",
-		},
-	)
-	if err != nil {
-		log.Fatalf("Failed to create HelmClient: %v\n", err)
-		return "", "", 0, err
+			RestConfig: kconfig,
+		}
+
+		helmClient, err = helmclient.NewClientFromRestConf(opt)
+		if err != nil {
+			log.Fatalf("Failed to create HelmClient: %v\n", err)
+			return "", "", 0, err
+		}
 	}
+
+	log.Print("helmClient Configured !!")
 
 	// create a repo reference
 	repo := repo.Entry{
@@ -67,12 +113,8 @@ func CreateChallenge(repository string, tag string, release_id string) (string, 
 		return "", "", 0, err
 	}
 
-	// list all the deployed releases
-	// releases, err := helmClient.ListDeployedReleases()
-	// if err != nil {
-	// 	log.Fatalf("Failed to list deployed releases %v\n", err)
-	// }
-	// log.Printf("releases are: %v", releases[0].Name)
+	log.Print("Helm Repository Added!!")
+
 
 	// specify the challenge chart
 	chartSpec := helmclient.ChartSpec{
@@ -96,24 +138,10 @@ authorized_keys: %s`, repository, tag, pubKey),
 		return "", "", 0, err
 	}
 
+	log.Print("Helm installed or upgraded challenge!!")
+
+
 	// get pod IP and port functions
-
-	// Create a Kubernetes client.
-	var kconfig *rest.Config
-
-	if config.ENVIRONMENT == "DEV" {
-		kconfig, err = clientcmd.BuildConfigFromFlags("", config.KUBECONFIG)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to create Kubernetes client configuration: %v\n", err)
-			return "", "", 0, err
-		}
-	} else {
-		kconfig, err = rest.InClusterConfig()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to create Kubernetes client: %v\n", err)
-			return "", "", 0, err
-		}
-	}
 
 	client, err := kubernetes.NewForConfig(kconfig)
 	if err != nil {
@@ -121,12 +149,8 @@ authorized_keys: %s`, repository, tag, pubKey),
 		return "", "", 0, err
 	}
 
-	// Get the public IP address of the node exposing the pod.
-	// publicIPAddress, err := utils.GetPublicIPAddress()
-	// if err != nil {
-	// 	fmt.Fprintf(os.Stderr, "Failed to get public IP address: %v\n", err)
-	// 	return "", "", 0, err
-	// }
+	log.Print("Kubernetes Configured !!")
+
 
 	nodeList, err := client.CoreV1().Nodes().List(context.Background(), v1.ListOptions{})
 	if err != nil {
@@ -157,5 +181,5 @@ authorized_keys: %s`, repository, tag, pubKey),
 	// Print the NodePort port number.
 	fmt.Printf("NodePort port number for the `my-service` Service on the public IP address of the node exposing the pod: %s:%d\n", publicIPAddress, nodePort)
 
-	return pubKey, publicIPAddress, nodePort, nil
+	return privKey, publicIPAddress, nodePort, nil
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+
 	amqp "github.com/rabbitmq/amqp091-go"
 	"sys.io/assignment-service/app"
 	"sys.io/assignment-service/config"
@@ -17,44 +18,43 @@ func main() {
 	config.InitEnv()
 	log.Println(".env loaded!")
 
-	
 	rmq := config.SetupMQ()
 	defer rmq.Conn.Close()
 	defer rmq.Ch.Close()
 
 	msgs, err := rmq.Ch.Consume(
-		"queue.assignment.toService",    // queue
-		"assignmentService",    // consumer
-		false,      // auto-ack
-		false,     // exclusive
-		false,     // no-local
-		false,     // no-wait
-		nil,       // args
+		"queue.assignment.toService", // queue
+		"assignmentService",          // consumer
+		false,                        // auto-ack
+		false,                        // exclusive
+		false,                        // no-local
+		false,                        // no-wait
+		nil,                          // args
 	)
-
 
 	utils.FailOnError(err, "Failed to consume messages from queue.assignment.toService")
 
 	var forever chan struct{}
 
-	go func ()  {
-		
+	go func() {
+
 		for msg := range msgs {
 			log.Println("Consuming")
 			log.Printf("Received msg: %s\n", msg.Body)
 
-			 // Decode the JSON message body.
-			 var data map[string]interface{}
-			 err := json.Unmarshal(msg.Body, &data)
-			 if err != nil {
-				 log.Printf("Failed to decode JSON message body: %s", err)
-				 continue
-			 }
+			// Decode the JSON message body.
+			var data map[string]interface{}
+			err := json.Unmarshal(msg.Body, &data)
+			if err != nil {
+				log.Printf("Failed to decode JSON message body: %s", err)
+				continue
+			}
 
-			 // Retrieve the repository, tag, and release_id from the JSON data.
-			 repository, tag, release_id := data["repository"].(string), data["tag"].(string), data["release_id"].(string)
-	
-			app.CreateChallenge(repository,tag,release_id)
+			// Retrieve the repository, tag, and release_id from the JSON data.
+			repository, tag, release_id := data["repository"].(string), data["tag"].(string), data["release_id"].(string)
+
+			privKey,publicIPAdress,nodePort,err := app.CreateChallenge(repository, tag, release_id)
+
 			if err != nil {
 				log.Printf("Failed to create challenge: %s", err)
 				continue
@@ -62,6 +62,9 @@ func main() {
 
 			msgBody, err := json.Marshal(map[string]interface{}{
 				"message": "Challenge created successfully.",
+				"privey": privKey,
+				"publicIPAdress": publicIPAdress,
+				"nodePort":nodePort,
 			})
 			if err != nil {
 				log.Printf("Failed to marshal JSON message body: %s", err)
@@ -70,11 +73,11 @@ func main() {
 
 			q, err := rmq.Ch.QueueDeclare(
 				"queue.assignment.FromService", // name
-				true,   // durable
-				false,   // delete when unused
-				false,   // exclusive
-				false,   // no-wait
-				nil,     // arguments
+				true,                           // durable
+				false,                          // delete when unused
+				false,                          // exclusive
+				false,                          // no-wait
+				nil,                            // arguments
 			)
 			if err != nil {
 				log.Printf("Failed to marshal JSON message body: %s", err)
@@ -82,12 +85,12 @@ func main() {
 			}
 			// ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			// defer cancel()
-			
+
 			err = rmq.Ch.PublishWithContext(context.TODO(),
-				"", // exchange
-				q.Name,                 // routing key
-				false,                           // mandatory
-				false,                           // immediate
+				"",     // exchange
+				q.Name, // routing key
+				false,  // mandatory
+				false,  // immediate
 				amqp.Publishing{
 					ContentType: "application/json",
 					Body:        msgBody,
@@ -103,7 +106,7 @@ func main() {
 				log.Printf("Failed to ack message: %s", err)
 			}
 		}
-	} ()
+	}()
 
 	log.Printf(" [*] Waiting for messages")
 	<-forever
