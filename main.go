@@ -62,7 +62,7 @@ func main() {
 
 			msgBody, err := json.Marshal(map[string]interface{}{
 				"message": "Challenge created successfully.",
-				"privey": privKey,
+				"privKey": privKey,
 				"publicIPAdress": publicIPAdress,
 				"nodePort":nodePort,
 			})
