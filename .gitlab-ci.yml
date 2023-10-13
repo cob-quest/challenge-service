@@ -52,7 +52,7 @@ BuildPush:
   stage: Build and Push
   script:
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
-    - docker build --compress -t $CI_REGISTRY/group/project/image:$CI_COMMIT_SHORT_SHA .
+    - docker build --compress -t $CI_REGISTRY/group/project/image:$CI_COMMIT_SHORT_SHA -f ./docker/Dockerfile .  
     - docker push $CI_REGISTRY/group/project/image:$CI_COMMIT_SHORT_SHA
 
 ##############################################################################
