@@ -68,6 +68,9 @@ BuildPush:
 
 update_chart_manifest:
   stage: Update Chart
+  image: docker:24.0.2
+  services:
+    - docker:24.0.2-dind
   only:
     - main
   needs:
