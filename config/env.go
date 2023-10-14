@@ -4,19 +4,21 @@ import (
 	"fmt"
 	"log"
 	"os"
+
 	"github.com/joho/godotenv"
 )
 
 var (
-	KUBECONFIG string
-	ENVIRONMENT string
+	KUBECONFIG         string
+	ENVIRONMENT        string
 	HELM_CHART_NAME    string
 	HELM_REPO_NAME     string
 	HELM_REPO_URL      string
 	HELM_REPO_USERNAME string
 	HELM_REPO_PASSWORD string
-	RABBITMQ_USERNAME string
-	RABBITMQ_PASSWORD string
+	// RABBITMQ_USERNAME  string
+	// RABBITMQ_PASSWORD  string
+	AMQP_URL           string
 )
 
 func InitEnv() {
@@ -30,7 +32,6 @@ func InitEnv() {
 	if err != nil {
 		log.Printf("Failed to load .env")
 	}
-
 
 	// env type
 	ENVIRONMENT = os.Getenv("ENVIRONMENT")
@@ -48,10 +49,10 @@ func InitEnv() {
 	HELM_REPO_URL = os.Getenv("HELM_REPO_URL")
 	HELM_REPO_USERNAME = os.Getenv("HELM_REPO_USERNAME")
 	HELM_REPO_PASSWORD = os.Getenv("HELM_REPO_PASSWORD")
-	
-	// rmq env
-	RABBITMQ_USERNAME = os.Getenv("RABBITMQ_USERNAME")
-	RABBITMQ_PASSWORD = os.Getenv("RABBITMQ_PASSWORD")
 
+	// rmq env
+	// RABBITMQ_USERNAME = os.Getenv("RABBITMQ_USERNAME")
+	// RABBITMQ_PASSWORD = os.Getenv("RABBITMQ_PASSWORD")
+	AMQP_URL = os.Getenv("AMQP_URL")
 
 }
