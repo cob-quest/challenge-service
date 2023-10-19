@@ -46,13 +46,13 @@ lint:
 
 release-image:
   stage: Release
-  image: docker:24.0.2
+  image: jdrouet/docker-with-buildx:stable
   services:
-    - docker:24.0.2-dind
+    - docker:dind
   before_script:
     - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
   script:
-    - docker build --compress -t $CI_REGISTRY_IMAGE/$CI_COMMIT_BRANCH:$CI_COMMIT_SHORT_SHA -f ./docker/Dockerfile .  
+    - docker buildx build --platform linux/arm/v7,linux/arm64/v8,linux/amd64 -t $CI_REGISTRY_IMAGE/$CI_COMMIT_BRANCH:$CI_COMMIT_SHORT_SHA -f ./docker/Dockerfile .  
     - docker push $CI_REGISTRY_IMAGE/$CI_COMMIT_BRANCH:$CI_COMMIT_SHORT_SHA
 
 update_chart_manifest:
