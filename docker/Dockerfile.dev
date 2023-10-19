@@ -1,6 +1,6 @@
-FROM golang:alpine
+FROM golang:alpine3.17
 
-WORKDIR /service
+WORKDIR /app
 
 RUN go install github.com/cosmtrek/air@latest
 
