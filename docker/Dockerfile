@@ -6,7 +6,7 @@ COPY . .
 
 RUN go mod download
 
-RUN GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o assignment
+RUN GOOS=linux go build -ldflags="-w -s" -o assignment
 
 FROM gcr.io/distroless/base-debian12
 
