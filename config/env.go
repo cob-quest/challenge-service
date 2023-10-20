@@ -18,7 +18,7 @@ var (
 	HELM_REPO_PASSWORD string
 	// RABBITMQ_USERNAME  string
 	// RABBITMQ_PASSWORD  string
-	AMQP_URL           string
+	AMQP_URL string
 )
 
 func InitEnv() {
@@ -53,6 +53,14 @@ func InitEnv() {
 	// rmq env
 	// RABBITMQ_USERNAME = os.Getenv("RABBITMQ_USERNAME")
 	// RABBITMQ_PASSWORD = os.Getenv("RABBITMQ_PASSWORD")
-	AMQP_URL = os.Getenv("AMQP_URL")
-
+	amqpUsername := os.Getenv("AMQP_USERNAME")
+	amqpPassword := os.Getenv("AMQP_PASSNAME")
+	amqpHostname := os.Getenv("AMQP_HOSTNAME")
+	AMQP_URL = fmt.Sprintf(
+		"amqp://%s:%s@%s:%s/",
+		amqpUsername,
+		amqpPassword,
+		amqpHostname,
+		"5672",
+	)
 }
