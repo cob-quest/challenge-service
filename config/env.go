@@ -23,14 +23,9 @@ var (
 
 func InitEnv() {
 	// loads environment variables
-	err := godotenv.Load("/etc/.env")
+	err := godotenv.Load("secrets/.env")
 	if err != nil {
-		log.Printf("Failed to load /etc/.env")
-	}
-
-	err = godotenv.Load(".env")
-	if err != nil {
-		log.Printf("Failed to load .env")
+		log.Printf("Failed to load secrets/.env")
 	}
 
 	// env type
@@ -54,7 +49,7 @@ func InitEnv() {
 	// RABBITMQ_USERNAME = os.Getenv("RABBITMQ_USERNAME")
 	// RABBITMQ_PASSWORD = os.Getenv("RABBITMQ_PASSWORD")
 	amqpUsername := os.Getenv("AMQP_USERNAME")
-	amqpPassword := os.Getenv("AMQP_PASSNAME")
+	amqpPassword := os.Getenv("AMQP_PASSWORD")
 	amqpHostname := os.Getenv("AMQP_HOSTNAME")
 	AMQP_URL = fmt.Sprintf(
 		"amqp://%s:%s@%s:%s/",
