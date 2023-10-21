@@ -1,15 +1,17 @@
-FROM golang:alpine
+FROM golang:alpine as build
 
 WORKDIR /app
 
-RUN go install github.com/cosmtrek/air@latest
-
-COPY go.* .
+COPY . .
 
 RUN go mod download
 
-COPY . .
+RUN GOOS=linux go build -ldflags="-w -s" -o assignment
 
-EXPOSE 5050
+# FROM gcr.io/distroless/base-debian12
 
-CMD [ "air", "-d"]
+# WORKDIR /
+
+# COPY --from=build /app/assignment .
+
+CMD [ "./assignment" ]

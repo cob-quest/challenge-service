@@ -23,7 +23,7 @@ var (
 
 func InitEnv() {
 	// loads environment variables
-	err := godotenv.Load("secrets/.env")
+	err := godotenv.Load("/app/secrets/.env")
 	if err != nil {
 		log.Printf("Failed to load secrets/.env")
 	}
@@ -58,4 +58,5 @@ func InitEnv() {
 		amqpHostname,
 		"5672",
 	)
+	fmt.Printf("AMQP LINK: %s", AMQP_URL)
 }

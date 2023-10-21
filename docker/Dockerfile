@@ -1,6 +1,6 @@
 FROM golang:alpine as build
 
-WORKDIR /x
+WORKDIR /app
 
 COPY . .
 
@@ -10,8 +10,8 @@ RUN GOOS=linux go build -ldflags="-w -s" -o assignment
 
 FROM gcr.io/distroless/base-debian12
 
-WORKDIR /
+WORKDIR /app
 
-COPY --from=build /service/assignment .
+COPY --from=build /app/assignment .
 
 CMD [ "./assignment" ]
