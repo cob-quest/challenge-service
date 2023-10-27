@@ -6,12 +6,12 @@ COPY . .
 
 RUN go mod download
 
-RUN GOOS=linux go build -ldflags="-w -s" -o assignment
+RUN GOOS=linux go build -ldflags="-w -s" -o challenge
 
 FROM gcr.io/distroless/base-debian12
 
 WORKDIR /app
 
-COPY --from=build /app/assignment .
+COPY --from=build /app/challenge .
 
-CMD [ "./assignment" ]
+CMD [ "./challenge" ]

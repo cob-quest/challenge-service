@@ -4,7 +4,7 @@ import (
 	"log"
 
 	amqp "github.com/rabbitmq/amqp091-go"
-	"sys.io/assignment-service/utils"
+	"sys.io/challenge-service/utils"
 )
 
 type RabbitMQ struct {
@@ -14,14 +14,11 @@ type RabbitMQ struct {
 
 func SetupMQ() *RabbitMQ {
 
-
 	// url := fmt.Sprintf("amqp://%s:%s@rabbitmq-headless.platform.svc.cluster.local:5672", RABBITMQ_USERNAME, RABBITMQ_PASSWORD)
-
 
 	// if ENVIRONMENT == "DEV" {
 	// 	url = fmt.Sprintf("amqp://%s:%s@%s:5672", RABBITMQ_USERNAME, RABBITMQ_PASSWORD,"127.0.0.1")
 	// }
-
 
 	// Connect to MQ
 	log.Println("Connecting to MQ")

@@ -1,4 +1,4 @@
-IMAGE_TAG=registry.gitlab.com/cs302-2023/g3-team8/project/assignment-service/main:latest
+IMAGE_TAG=registry.gitlab.com/cs302-2023/g3-team8/project/challenge-service/main:latest
 .DEFAULT_GOAL := run
 
 # running

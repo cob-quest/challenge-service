@@ -6,9 +6,9 @@ import (
 	"log"
 
 	amqp "github.com/rabbitmq/amqp091-go"
-	"sys.io/assignment-service/app"
-	"sys.io/assignment-service/config"
-	"sys.io/assignment-service/utils"
+	"sys.io/challenge-service/app"
+	"sys.io/challenge-service/config"
+	"sys.io/challenge-service/utils"
 )
 
 func main() {
@@ -23,16 +23,16 @@ func main() {
 	defer rmq.Ch.Close()
 
 	msgs, err := rmq.Ch.Consume(
-		"queue.assignment.toService", // queue
-		"assignmentService",          // consumer
-		false,                        // auto-ack
-		false,                        // exclusive
-		false,                        // no-local
-		false,                        // no-wait
-		nil,                          // args
+		"queue.challenge.toService", // queue
+		"challengeService",          // consumer
+		false,                       // auto-ack
+		false,                       // exclusive
+		false,                       // no-local
+		false,                       // no-wait
+		nil,                         // args
 	)
 
-	utils.FailOnError(err, "Failed to consume messages from queue.assignment.toService")
+	utils.FailOnError(err, "Failed to consume messages from queue.challenge.toService")
 
 	var forever chan struct{}
 
@@ -53,7 +53,7 @@ func main() {
 			// Retrieve the repository, tag, and release_id from the JSON data.
 			repository, tag, release_id := data["repository"].(string), data["tag"].(string), data["release_id"].(string)
 
-			privKey,publicIPAdress,nodePort,err := app.CreateChallenge(repository, tag, release_id)
+			privKey, publicIPAdress, nodePort, err := app.CreateChallenge(repository, tag, release_id)
 
 			if err != nil {
 				log.Printf("Failed to create challenge: %s", err)
@@ -61,10 +61,10 @@ func main() {
 			}
 
 			msgBody, err := json.Marshal(map[string]interface{}{
-				"message": "Challenge created successfully.",
-				"privKey": privKey,
+				"message":        "Challenge created successfully.",
+				"privKey":        privKey,
 				"publicIPAdress": publicIPAdress,
-				"nodePort":nodePort,
+				"nodePort":       nodePort,
 			})
 			if err != nil {
 				log.Printf("Failed to marshal JSON message body: %s", err)
@@ -72,12 +72,12 @@ func main() {
 			}
 
 			q, err := rmq.Ch.QueueDeclare(
-				"queue.assignment.FromService", // name
-				true,                           // durable
-				false,                          // delete when unused
-				false,                          // exclusive
-				false,                          // no-wait
-				nil,                            // arguments
+				"queue.challenge.FromService", // name
+				true,                          // durable
+				false,                         // delete when unused
+				false,                         // exclusive
+				false,                         // no-wait
+				nil,                           // arguments
 			)
 			if err != nil {
 				log.Printf("Failed to marshal JSON message body: %s", err)
@@ -97,7 +97,7 @@ func main() {
 				},
 			)
 			if err != nil {
-				log.Printf("Failed to publish message to queue.assignment.FromService: %s", err)
+				log.Printf("Failed to publish message to queue.challenge.FromService: %s", err)
 				continue
 			}
 

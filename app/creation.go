@@ -12,8 +12,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	"sys.io/assignment-service/config"
-	"sys.io/assignment-service/utils"
+	"sys.io/challenge-service/config"
+	"sys.io/challenge-service/utils"
 )
 
 func CreateChallenge(repository string, tag string, release_id string) (string, string, int32, error) {
@@ -115,7 +115,6 @@ func CreateChallenge(repository string, tag string, release_id string) (string, 
 
 	log.Print("Helm Repository Added!!")
 
-
 	// specify the challenge chart
 	chartSpec := helmclient.ChartSpec{
 		ReleaseName:     release_id,
@@ -140,7 +139,6 @@ authorized_keys: %s`, repository, tag, pubKey),
 
 	log.Print("Helm installed or upgraded challenge!!")
 
-
 	// get pod IP and port functions
 
 	client, err := kubernetes.NewForConfig(kconfig)
@@ -150,7 +148,6 @@ authorized_keys: %s`, repository, tag, pubKey),
 	}
 
 	log.Print("Kubernetes Configured !!")
-
 
 	nodeList, err := client.CoreV1().Nodes().List(context.Background(), v1.ListOptions{})
 	if err != nil {

@@ -1,4 +1,4 @@
-module sys.io/assignment-service
+module sys.io/challenge-service
 
 go 1.20
 

@@ -8,22 +8,21 @@ stages:
 ##############################################################################
 variables:
   # AWS_WEB_IDENTITY_TOKEN_FILE: /tmp/web-identity-token
-  CD_CHART_REPO: assignment-charts
-  CD_GIT_REPOSITORY: git@gitlab.com:cs302-2023/g3-team8/project/k8s/assignment-charts.git
+  CD_CHART_REPO: challenge-charts
+  CD_GIT_REPOSITORY: git@gitlab.com:cs302-2023/g3-team8/project/k8s/challenge-charts.git
   CD_MANIFEST_FILE: values.yaml
   APP_NAME: gitops-argocd-deploy
   CHART_FOLDER: helm
-
 
 ##############################################################################
 ##                Setup and Enable SSH                          ##
 ##############################################################################
 .enable_ssh: &enable_ssh |-
-    apk add --no-cache git
-    mkdir -p /root/.ssh
-    echo "$SSH_PRIVATE_KEY" > /root/.ssh/id_rsa
-    ssh-keyscan -H gitlab.com > /root/.ssh/known_hosts
-    chmod 600 /root/.ssh/id_rsa
+  apk add --no-cache git
+  mkdir -p /root/.ssh
+  echo "$SSH_PRIVATE_KEY" > /root/.ssh/id_rsa
+  ssh-keyscan -H gitlab.com > /root/.ssh/known_hosts
+  chmod 600 /root/.ssh/id_rsa
 
 ##############################################################################
 ##                             Build Image                                 ##
@@ -33,7 +32,7 @@ lint:
   stage: Test
   script:
     # Use default .golangci.yml file from the image if one is not present in the project root.
-    - '[ -e .golangci.yml ] || cp /golangci/.golangci.yml .'
+    - "[ -e .golangci.yml ] || cp /golangci/.golangci.yml ."
     # Write the code coverage report to gl-code-quality-report.json
     # and print linting issues to stdout in the format: path/to/file:line description
     # remove `--issues-exit-code 0` or set to non-zero to fail the job if linting issues are detected
@@ -53,10 +52,9 @@ release-image:
   before_script:
     - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
   script:
-    - docker build --compress -t $CI_REGISTRY_IMAGE/$CI_COMMIT_BRANCH:$CI_COMMIT_SHORT_SHA -f ./docker/Dockerfile .  
+    - docker build --compress -t $CI_REGISTRY_IMAGE/$CI_COMMIT_BRANCH:$CI_COMMIT_SHORT_SHA -f ./docker/Dockerfile .
     - docker push $CI_REGISTRY_IMAGE/$CI_COMMIT_BRANCH:$CI_COMMIT_SHORT_SHA
   when: manual
-  
 
 update_chart_manifest:
   stage: Update Chart
