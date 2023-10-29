@@ -1,0 +1,49 @@
+[
+    {
+        "challengeName": "testchallenge",
+        "corId": "123",
+        "creatorName": "john",
+        "imageName": "johnimage",
+        "imageTag": "123",
+        "duration": 123,
+        "participants": [
+            "john@gmail.com",
+            "jk@gmail.com"
+        ]
+    },
+    {
+        "challengeName": "testchallenge",
+        "corId": "123",
+        "creatorName": "cs302",
+        "imageName": "image_0",
+        "imageTag": "tag1",
+        "duration": 123,
+        "participants": [
+            "john@gmail.com",
+            "jk@gmail.com"
+        ]
+    },
+    {
+        "challengeName": "123",
+        "participant": "john@gmail.com",
+        "creatorName": "john@gmail.com",
+        "token": "john",
+        "imageRegistryLink": "gitlab.com",
+        "sshkey": "keykey",
+        "result": 98.7,
+        "ipaddress": "123.123.123.123",
+        "port": "12345"
+    },
+    {
+        "challengeName": "testchallenge",
+        "corId": "12",
+        "creatorName": "cs302",
+        "imageName": "image_0",
+        "imageTag": "tag1",
+        "duration": 123,
+        "participants": [
+            "john@gmail.com",
+            "jk@gmail.com"
+        ]
+    }
+]

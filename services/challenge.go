@@ -1,22 +1,33 @@
-package app
+package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 
+	"github.com/google/uuid"
 	helmclient "github.com/mittwald/go-helm-client"
+	amqp "github.com/rabbitmq/amqp091-go"
 	"helm.sh/helm/v3/pkg/repo"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+
+	// "sys.io/challenge-service/collections"
+	"sys.io/challenge-service/collections"
 	"sys.io/challenge-service/config"
+	"sys.io/challenge-service/models"
 	"sys.io/challenge-service/utils"
 )
 
-func CreateChallenge(repository string, tag string, release_id string) (string, string, int32, error) {
+func StartChallenge(data map[string]interface{}) (string, string, int32, error) {
+
+	// Unpack JSON data.
+	repository, tag, release_id := data["repository"].(string), data["tag"].(string), data["release_id"].(string)
+
 	// Create a Kubernetes client.
 	var kconfig *rest.Config
 	var err error
@@ -179,4 +190,83 @@ authorized_keys: %s`, repository, tag, pubKey),
 	fmt.Printf("NodePort port number for the `my-service` Service on the public IP address of the node exposing the pod: %s:%d\n", publicIPAddress, nodePort)
 
 	return privKey, publicIPAddress, nodePort, nil
+}
+
+func CreateChallenge(ch *amqp.Channel, ctx context.Context, msg []byte, routingKey string) {
+
+
+	// Unpack JSON data.
+	var data map[string]interface{}
+	err := json.Unmarshal(msg, &data)
+	if err != nil {
+		log.Printf("Failed to decode JSON message body: %s", err)
+		utils.FailOnError(err, "Failed to decode JSON message body")
+		return
+	}
+
+	var challenge models.Challenge
+	err = json.Unmarshal(msg, &challenge)
+	if err != nil {
+		data["eventStatus"] = "challengeCreateFailed"
+		log.Printf("Failed to decode JSON message body: %s", err)
+
+		msgBody,_ := json.Marshal(data)
+		Publish(ch, ctx, msgBody, routingKey)
+		return
+	}
+
+	//find image 
+	image,err := collections.GetImage(challenge.CreatorName, challenge.ImageName, challenge.ImageTag)
+	if err != nil {
+		data["eventStatus"] = "challengeCreateFailed"
+		log.Printf("Failed to Find image: %s", err)
+
+		msgBody,_ := json.Marshal(data)
+		Publish(ch, ctx, msgBody, routingKey)
+		return
+	}
+	challenge.ImageRegistryLink = image.ImageRegistryLink
+
+	// Create challenge
+
+	_, err = collections.CreateChallenge(&challenge)
+	if err != nil {
+		data["eventStatus"] = "challengeCreateFailed"
+		log.Printf("Failed to create challenge: %s", err)
+
+		msgBody,_ := json.Marshal(data)
+		Publish(ch, ctx, msgBody, routingKey)
+		return
+	}
+
+	// Create attempts
+	for _,v := range challenge.Participants{
+		
+		_, err = collections.CreateAttempt(&models.Attempt{
+			Participant:       v,
+			Token:             uuid.NewString(),
+			Sshkey:            "",
+			Result:            0,
+			Ipaddress:         "",
+			Port:              "",
+			ChallengeName:     challenge.ChallengeName,
+			CreatorName:       challenge.CreatorName,
+			ImageRegistryLink: challenge.ImageRegistryLink,
+		})
+		if err != nil {
+			data["eventStatus"] = "challengeCreateFailed"
+			log.Printf("Failed to create attempt for %s: %s", v,err)
+
+			msgBody,_ := json.Marshal(data)
+			Publish(ch, ctx, msgBody, routingKey)
+			return
+		}
+	}
+
+
+
+	data["eventStatus"] = "challengeCreated"
+	msgBody,_ := json.Marshal(data)
+	Publish(ch, ctx, msgBody, routingKey)
+	// return message for RMQ
 }

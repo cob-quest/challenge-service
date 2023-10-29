@@ -18,6 +18,8 @@ var (
 	HELM_REPO_PASSWORD string
 	// RABBITMQ_USERNAME  string
 	// RABBITMQ_PASSWORD  string
+	MONGODB_URL string
+
 	AMQP_URL string
 )
 
@@ -59,4 +61,26 @@ func InitEnv() {
 		"5672",
 	)
 	fmt.Printf("AMQP LINK: %s", AMQP_URL)
+
+	// mongo env
+	user := os.Getenv("MONGODB_USERNAME")
+	pass := os.Getenv("MONGODB_PASSWORD")
+	host := os.Getenv("MONGODB_HOSTNAME")
+	port := "27017"
+	MONGODB_URL = fmt.Sprintf("mongodb://%s:%s@%s:%s", user, pass, host, port)
 }
+
+func GetMongoURI() string {
+	err := godotenv.Load("secrets/.env")
+	if err != nil {
+		panic("Error loading env file")
+	}
+	MONGO_USER := os.Getenv("MONGODB_USERNAME")
+	MONGO_PASS := os.Getenv("MONGODB_PASSWORD")
+	MONGO_HOSTNAME := os.Getenv("MONGODB_HOSTNAME")
+	if MONGODB_URL == "" {
+		MONGODB_URL = fmt.Sprintf("mongodb://%s:%s@%s:%s", MONGO_USER, MONGO_PASS, MONGO_HOSTNAME, "27017")
+	}
+	return MONGODB_URL
+}
+
