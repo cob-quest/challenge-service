@@ -45,7 +45,10 @@ func Consume(rmq *config.RabbitMQ, queueName string) {
 
 			if routingKey == "challengeCreate" {
 				CreateChallenge(ch, ctx, d.Body, routingKey)
-			}	
+			} else if routingKey == "challengeStart" {
+				StartChallenge(ch, ctx, d.Body, routingKey)
+			}
+
 
 			// Acknowledge the message
 			err = d.Ack(false)

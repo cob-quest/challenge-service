@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	helmclient "github.com/mittwald/go-helm-client"
@@ -15,42 +18,75 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-
-	// "sys.io/challenge-service/collections"
 	"sys.io/challenge-service/collections"
 	"sys.io/challenge-service/config"
 	"sys.io/challenge-service/models"
 	"sys.io/challenge-service/utils"
 )
 
-func StartChallenge(data map[string]interface{}) (string, string, int32, error) {
+func StartChallenge(ch *amqp.Channel, ctx context.Context, msg []byte, routingKey string) {
 
 	// Unpack JSON data.
-	repository, tag, release_id := data["repository"].(string), data["tag"].(string), data["release_id"].(string)
+	var data map[string]interface{}
+	err := json.Unmarshal(msg, &data)
+	if err != nil {
+		log.Printf("Failed to decode JSON message body: %s", err)
+		utils.FailOnError(err, "Failed to decode JSON message body")
+		return
+	}
+
+	var attempt models.Attempt
+	err = json.Unmarshal(msg, &attempt)
+	if err != nil {
+		data["eventStatus"] = "challengeCreateFailed"
+		log.Printf("Failed to decode JSON message body: %s", err)
+
+		msgBody, _ := json.Marshal(data)
+		Publish(ch, ctx, msgBody, routingKey)
+		return
+	}
+
+	//Get repository, tag and release_id
+	url := strings.TrimPrefix(attempt.ImageRegistryLink, "https://")
+
+	repository, tag := strings.Split(url, ":")[0], strings.Split(url, ":")[1]
+	release_id := fmt.Sprintf("a%s", attempt.Token)
 
 	// Create a Kubernetes client.
 	var kconfig *rest.Config
-	var err error
 
 	if config.ENVIRONMENT == "DEV" {
 		kconfig, err = clientcmd.BuildConfigFromFlags("", config.KUBECONFIG)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to create Kubernetes client configuration: %v\n", err)
-			return "", "", 0, err
+			data["eventStatus"] = "challengeCreateFailed"
+			log.Printf("Failed to create Kubernetes client: %s", err)
+	
+			msgBody, _ := json.Marshal(data)
+			Publish(ch, ctx, msgBody, routingKey)
+			return
 		}
 	} else {
 		kconfig, err = rest.InClusterConfig()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to create Kubernetes client: %v\n", err)
-			return "", "", 0, err
+			data["eventStatus"] = "challengeCreateFailed"
+			log.Printf("Failed to create Kubernetes client: %s", err)
+	
+			msgBody, _ := json.Marshal(data)
+			Publish(ch, ctx, msgBody, routingKey)
+			return
 		}
 	}
 
 	// generate ssh keys and convert them into strings
 	pubKey, privKey, err := utils.MakeSSHKeyPair()
 	if err != nil {
-		log.Fatal(err)
-		return "", "", 0, err
+		log.Printf("%s", err)
+		data["eventStatus"] = "challengeStartFailed"
+		log.Printf("Challenge %s start failed ...", release_id)
+
+		msgBody, _ := json.Marshal(data)
+		Publish(ch, ctx, msgBody, routingKey)
+		return
 	}
 	log.Printf("pub: %s, priv: %s", pubKey, privKey)
 
@@ -81,8 +117,13 @@ func StartChallenge(data map[string]interface{}) (string, string, int32, error) 
 			},
 		)
 		if err != nil {
-			log.Fatalf("Failed to create HelmClient: %v\n", err)
-			return "", "", 0, err
+			log.Printf("Failed to create HelmClient: %v\n", err)
+			data["eventStatus"] = "challengeStartFailed"
+			log.Printf("Challenge %s start failed ...", release_id)
+
+			msgBody, _ := json.Marshal(data)
+			Publish(ch, ctx, msgBody, routingKey)
+			return
 		}
 	} else {
 		opt := &helmclient.RestConfClientOptions{
@@ -101,8 +142,13 @@ func StartChallenge(data map[string]interface{}) (string, string, int32, error) 
 
 		helmClient, err = helmclient.NewClientFromRestConf(opt)
 		if err != nil {
-			log.Fatalf("Failed to create HelmClient: %v\n", err)
-			return "", "", 0, err
+			log.Printf("Failed to create HelmClient: %v\n", err)
+			data["eventStatus"] = "challengeStartFailed"
+			log.Printf("Challenge %s start failed ...", release_id)
+			
+			msgBody, _ := json.Marshal(data)
+			Publish(ch, ctx, msgBody, routingKey)
+			return
 		}
 	}
 
@@ -120,8 +166,13 @@ func StartChallenge(data map[string]interface{}) (string, string, int32, error) 
 	// add the chart repo reference
 	err = helmClient.AddOrUpdateChartRepo(repo)
 	if err != nil {
-		log.Fatalf("Failed to create HelmClient: %v\n", err)
-		return "", "", 0, err
+		log.Printf("Failed to add or update HelmChartRepo: %v\n", err)
+		data["eventStatus"] = "challengeStartFailed"
+		log.Printf("Challenge %s start failed ...", release_id)
+		
+		msgBody, _ := json.Marshal(data)
+		Publish(ch, ctx, msgBody, routingKey)
+		return
 	}
 
 	log.Print("Helm Repository Added!!")
@@ -135,8 +186,9 @@ func StartChallenge(data map[string]interface{}) (string, string, int32, error) 
 		GenerateName:    true,
 		ValuesYaml: fmt.Sprintf(`
 image:
+  registry: registry.gitlab.com
   repository: %s
-  pullPolicy: Never
+  pullPolicy: IfNotPresent
   tag: %s
 imagePullSecrets:
   - name: docker-registry-credentials
@@ -145,31 +197,82 @@ authorized_keys: %s`, repository, tag, pubKey),
 
 	// install or upgrade a chart release
 	if _, err := helmClient.InstallOrUpgradeChart(context.Background(), &chartSpec, nil); err != nil {
-		return "", "", 0, err
+		log.Printf("Failed to install or upgradeChart client: %v\n", err)
+		data["eventStatus"] = "challengeStartFailed"
+		log.Printf("Challenge %s start failed ...", release_id)
+		
+		msgBody, _ := json.Marshal(data)
+		Publish(ch, ctx, msgBody, routingKey)
+		return
 	}
 
 	log.Print("Helm installed or upgraded challenge!!")
 
-	// get pod IP and port functions
-
+	//Configure kubenetes client
 	client, err := kubernetes.NewForConfig(kconfig)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to create Kubernetes client: %v\n", err)
-		return "", "", 0, err
+		return
 	}
 
 	log.Print("Kubernetes Configured !!")
 
-	nodeList, err := client.CoreV1().Nodes().List(context.Background(), v1.ListOptions{})
+	time.Sleep(2 * time.Second)
+
+	// check pod status
+	// Get the pod list for the deployment.
+	podList, err := client.CoreV1().Pods(namespace).List(context.Background(), v1.ListOptions{
+		LabelSelector: fmt.Sprintf("app.kubernetes.io/instance=%s", release_id),
+	})
 	if err != nil {
-		log.Fatal(err)
+		fmt.Println(err)
+		return
 	}
 
-	// Get the external IP address of the first node.
-	publicIPAddress := nodeList.Items[0].Status.Addresses[0].Address
+	pod := podList.Items[0]
 
-	// Print the external IP address.
-	// fmt.Println(publicIPAddress)
+	// Check status every 5 seconds
+	for pod.Status.Phase == "Pending" {
+		data["eventStatus"] = "challengeStarting"
+		log.Printf("Challenge %s is starting ... ", release_id)
+
+		msgBody, _ := json.Marshal(data)
+		Publish(ch, ctx, msgBody, routingKey)
+
+		time.Sleep(5 * time.Second)
+
+		podList, err := client.CoreV1().Pods(namespace).List(context.Background(), v1.ListOptions{
+			LabelSelector: fmt.Sprintf("app.kubernetes.io/instance=%s", release_id),
+		})
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		pod = podList.Items[0]
+	}
+
+	if pod.Status.Phase != "Running" {
+		data["eventStatus"] = "challengeStartFailed"
+		log.Printf("Challenge %s start failed ...", release_id)
+
+		msgBody, _ := json.Marshal(data)
+		Publish(ch, ctx, msgBody, routingKey)
+		return
+	}
+
+	// get pod IP and port functions
+	// Get the external IP address of the first node.
+	nodeList, err := client.CoreV1().Nodes().List(context.Background(), v1.ListOptions{})
+	if err != nil {
+		log.Printf("%s", err)
+		data["eventStatus"] = "challengeStartFailed"
+		log.Printf("Challenge %s start failed ...", release_id)
+
+		msgBody, _ := json.Marshal(data)
+		Publish(ch, ctx, msgBody, routingKey)
+		return
+	}
+	publicIPAddress := nodeList.Items[0].Status.Addresses[0].Address
 
 	// Get the NodePort port number for the `my-service` Service.
 	service, err := client.CoreV1().Services(namespace).Get(context.Background(), fmt.Sprintf("%s-challenge", release_id), v1.GetOptions{
@@ -180,8 +283,13 @@ authorized_keys: %s`, repository, tag, pubKey),
 		ResourceVersion: "",
 	})
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to get Service: %v\n", err)
-		return "", "", 0, err
+		log.Printf("%s", err)
+		data["eventStatus"] = "challengeStartFailed"
+		log.Printf("Challenge %s start failed ...", release_id)
+
+		msgBody, _ := json.Marshal(data)
+		Publish(ch, ctx, msgBody, routingKey)
+		return
 	}
 
 	nodePort := service.Spec.Ports[0].NodePort
@@ -189,11 +297,33 @@ authorized_keys: %s`, repository, tag, pubKey),
 	// Print the NodePort port number.
 	fmt.Printf("NodePort port number for the `my-service` Service on the public IP address of the node exposing the pod: %s:%d\n", publicIPAddress, nodePort)
 
-	return privKey, publicIPAddress, nodePort, nil
+	// Update attempt
+	attempt.Ipaddress = publicIPAddress
+	attempt.Port = strconv.FormatInt(int64(nodePort),10)
+	attempt.Sshkey = privKey
+
+	_,err = collections.UpdateAttempt(&attempt)
+	if err != nil {
+		log.Printf("%s", err)
+		data["eventStatus"] = "challengeStartFailed"
+		log.Printf("Challenge %s start failed ...", release_id)
+
+		msgBody, _ := json.Marshal(data)
+		Publish(ch, ctx, msgBody, routingKey)
+		return
+	}
+
+
+	// Successfully started
+	data["eventStatus"] = "challengeStarted"
+	log.Printf("Challenge %s started ...", release_id)
+
+	msgBody, _ := json.Marshal(data)
+	Publish(ch, ctx, msgBody, routingKey)
+
 }
 
 func CreateChallenge(ch *amqp.Channel, ctx context.Context, msg []byte, routingKey string) {
-
 
 	// Unpack JSON data.
 	var data map[string]interface{}
@@ -210,18 +340,18 @@ func CreateChallenge(ch *amqp.Channel, ctx context.Context, msg []byte, routingK
 		data["eventStatus"] = "challengeCreateFailed"
 		log.Printf("Failed to decode JSON message body: %s", err)
 
-		msgBody,_ := json.Marshal(data)
+		msgBody, _ := json.Marshal(data)
 		Publish(ch, ctx, msgBody, routingKey)
 		return
 	}
 
-	//find image 
-	image,err := collections.GetImage(challenge.CreatorName, challenge.ImageName, challenge.ImageTag)
+	//find image
+	image, err := collections.GetImage(challenge.CreatorName, challenge.ImageName, challenge.ImageTag)
 	if err != nil {
 		data["eventStatus"] = "challengeCreateFailed"
 		log.Printf("Failed to Find image: %s", err)
 
-		msgBody,_ := json.Marshal(data)
+		msgBody, _ := json.Marshal(data)
 		Publish(ch, ctx, msgBody, routingKey)
 		return
 	}
@@ -234,14 +364,14 @@ func CreateChallenge(ch *amqp.Channel, ctx context.Context, msg []byte, routingK
 		data["eventStatus"] = "challengeCreateFailed"
 		log.Printf("Failed to create challenge: %s", err)
 
-		msgBody,_ := json.Marshal(data)
+		msgBody, _ := json.Marshal(data)
 		Publish(ch, ctx, msgBody, routingKey)
 		return
 	}
 
 	// Create attempts
-	for _,v := range challenge.Participants{
-		
+	for _, v := range challenge.Participants {
+
 		_, err = collections.CreateAttempt(&models.Attempt{
 			Participant:       v,
 			Token:             uuid.NewString(),
@@ -255,18 +385,15 @@ func CreateChallenge(ch *amqp.Channel, ctx context.Context, msg []byte, routingK
 		})
 		if err != nil {
 			data["eventStatus"] = "challengeCreateFailed"
-			log.Printf("Failed to create attempt for %s: %s", v,err)
+			log.Printf("Failed to create attempt for %s: %s", v, err)
 
-			msgBody,_ := json.Marshal(data)
+			msgBody, _ := json.Marshal(data)
 			Publish(ch, ctx, msgBody, routingKey)
 			return
 		}
 	}
 
-
-
 	data["eventStatus"] = "challengeCreated"
-	msgBody,_ := json.Marshal(data)
+	msgBody, _ := json.Marshal(data)
 	Publish(ch, ctx, msgBody, routingKey)
-	// return message for RMQ
 }

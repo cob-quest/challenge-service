@@ -45,5 +45,15 @@
             "john@gmail.com",
             "jk@gmail.com"
         ]
+    },
+    {
+        "corId": "123",
+        "challengeName": "testchallenge",
+        "creatorName": "cs302",
+        "participant": "jk@gmail.com",
+        "token": "TOKEN_HERE",
+        "imageRegistryLink": "https://registry.gitlab.com/cs302-2023/g3-team8/project/image-builder-service/clitest:latest",
+        "eventStatus":"challengeStarting"        
     }
 ]
+
