@@ -22,11 +22,11 @@ func Consume(rmq *config.RabbitMQ, queueName string) {
 	msgs, err := ch.Consume(
 		queueName,
 		"challengeService", // consumer
-		false,           // auto-ack
-		false,           // exclusive
-		false,           // no-local
-		false,           // no-wait
-		nil,             // args
+		false,              // auto-ack
+		false,              // exclusive
+		false,              // no-local
+		false,              // no-wait
+		nil,                // args
 	)
 	utils.FailOnError(err, fmt.Sprintf("Failed to register a consumer for queue %s: %s", queueName, err))
 
@@ -44,11 +44,12 @@ func Consume(rmq *config.RabbitMQ, queueName string) {
 			routingKey := utils.GetSuffix(d.RoutingKey)
 
 			if routingKey == "challengeCreate" {
-				CreateChallenge(ch, ctx, d.Body, routingKey)
+				newRoutingKey := "challengeCreated"
+				CreateChallenge(ch, ctx, d.Body, newRoutingKey)
 			} else if routingKey == "challengeStart" {
-				StartChallenge(ch, ctx, d.Body, routingKey)
+				newRoutingKey := "challengeStarted"
+				StartChallenge(ch, ctx, d.Body, newRoutingKey)
 			}
-
 
 			// Acknowledge the message
 			err = d.Ack(false)
@@ -65,13 +66,13 @@ func Publish(ch *amqp.Channel, ctx context.Context, msg []byte, routingKey strin
 	err := ch.PublishWithContext(
 		ctx,
 		"topic.challenge", // exchange
-		fmt.Sprintf("challenge.fromService.%s",routingKey),     // routing key
-		true,           // mandatory
-		false,          // immediate
+		fmt.Sprintf("challenge.fromService.%s", routingKey), // routing key
+		true,  // mandatory
+		false, // immediate
 		amqp.Publishing{
 			ContentType: "text/plain",
 			Body:        msg,
 		})
 	utils.FailOnError(err, "Failed to publish a message")
-	log.Printf("Published a message with routing key %s", fmt.Sprintf("challenge.fromService.%s",routingKey))
+	log.Printf("Published a message with routing key %s", fmt.Sprintf("challenge.fromService.%s", routingKey))
 }
