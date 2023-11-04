@@ -60,7 +60,7 @@ func StartChallenge(ch *amqp.Channel, ctx context.Context, msg []byte, routingKe
 		if err != nil {
 			data["eventStatus"] = "challengeCreateFailed"
 			log.Printf("Failed to create Kubernetes client: %s", err)
-	
+
 			msgBody, _ := json.Marshal(data)
 			Publish(ch, ctx, msgBody, routingKey)
 			return
@@ -70,7 +70,7 @@ func StartChallenge(ch *amqp.Channel, ctx context.Context, msg []byte, routingKe
 		if err != nil {
 			data["eventStatus"] = "challengeCreateFailed"
 			log.Printf("Failed to create Kubernetes client: %s", err)
-	
+
 			msgBody, _ := json.Marshal(data)
 			Publish(ch, ctx, msgBody, routingKey)
 			return
@@ -145,7 +145,7 @@ func StartChallenge(ch *amqp.Channel, ctx context.Context, msg []byte, routingKe
 			log.Printf("Failed to create HelmClient: %v\n", err)
 			data["eventStatus"] = "challengeStartFailed"
 			log.Printf("Challenge %s start failed ...", release_id)
-			
+
 			msgBody, _ := json.Marshal(data)
 			Publish(ch, ctx, msgBody, routingKey)
 			return
@@ -169,7 +169,7 @@ func StartChallenge(ch *amqp.Channel, ctx context.Context, msg []byte, routingKe
 		log.Printf("Failed to add or update HelmChartRepo: %v\n", err)
 		data["eventStatus"] = "challengeStartFailed"
 		log.Printf("Challenge %s start failed ...", release_id)
-		
+
 		msgBody, _ := json.Marshal(data)
 		Publish(ch, ctx, msgBody, routingKey)
 		return
@@ -192,7 +192,14 @@ image:
   tag: %s
 imagePullSecrets:
   - name: docker-registry-credentials
-authorized_keys: %s`, repository, tag, pubKey),
+authorized_keys: %s
+env:
+  - name: PLATFORM_PASSWORD
+    value: %s
+  - name: PLATFORM_USERNAME
+    value: %s
+  - name: ATTEMPT_TOKEN
+    value: %s`, repository, tag, pubKey, config.PLATFORM_PASSWORD, config.PLATFORM_USERNAME, attempt.Token),
 	}
 
 	// install or upgrade a chart release
@@ -200,7 +207,7 @@ authorized_keys: %s`, repository, tag, pubKey),
 		log.Printf("Failed to install or upgradeChart client: %v\n", err)
 		data["eventStatus"] = "challengeStartFailed"
 		log.Printf("Challenge %s start failed ...", release_id)
-		
+
 		msgBody, _ := json.Marshal(data)
 		Publish(ch, ctx, msgBody, routingKey)
 		return
@@ -272,7 +279,21 @@ authorized_keys: %s`, repository, tag, pubKey),
 		Publish(ch, ctx, msgBody, routingKey)
 		return
 	}
-	publicIPAddress := nodeList.Items[0].Status.Addresses[0].Address
+
+	var publicIPAddress string
+	Address := nodeList.Items[0].Status.Addresses
+	for _, address := range Address {
+		if address.Type == "ExternalIP" {
+			log.Printf("Node ExternalIP: %s\n", address.Address)
+			publicIPAddress = address.Address
+			break
+		}
+	}
+
+	if publicIPAddress == "" {
+		publicIPAddress = nodeList.Items[0].Status.Addresses[0].Address
+		log.Printf("No external IP, Node InternalIP: %s\n", publicIPAddress)
+	}
 
 	// Get the NodePort port number for the `my-service` Service.
 	service, err := client.CoreV1().Services(namespace).Get(context.Background(), fmt.Sprintf("%s-challenge", release_id), v1.GetOptions{
@@ -299,10 +320,10 @@ authorized_keys: %s`, repository, tag, pubKey),
 
 	// Update attempt
 	attempt.Ipaddress = publicIPAddress
-	attempt.Port = strconv.FormatInt(int64(nodePort),10)
+	attempt.Port = strconv.FormatInt(int64(nodePort), 10)
 	attempt.Sshkey = privKey
 
-	_,err = collections.UpdateAttempt(&attempt)
+	_, err = collections.UpdateAttempt(&attempt)
 	if err != nil {
 		log.Printf("%s", err)
 		data["eventStatus"] = "challengeStartFailed"
@@ -312,7 +333,6 @@ authorized_keys: %s`, repository, tag, pubKey),
 		Publish(ch, ctx, msgBody, routingKey)
 		return
 	}
-
 
 	// Successfully started
 	data["eventStatus"] = "challengeStarted"

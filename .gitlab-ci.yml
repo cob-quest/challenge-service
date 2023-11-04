@@ -16,7 +16,7 @@ variables:
   CHART_FOLDER: helm
 
 ##############################################################################
-##                Setup and Enable SSH                          ##
+##                Setup and Enable SSH                                      ##
 ##############################################################################
 .enable_ssh: &enable_ssh |-
   apk add --no-cache git
@@ -26,7 +26,7 @@ variables:
   chmod 600 /root/.ssh/id_rsa
 
 ##############################################################################
-##                             Build Image                                 ##
+##                             Build Image                                  ##
 ##############################################################################
 lint:
   image: registry.gitlab.com/gitlab-org/gitlab-build-images:golangci-lint-alpine

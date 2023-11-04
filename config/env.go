@@ -19,7 +19,8 @@ var (
 	// RABBITMQ_USERNAME  string
 	// RABBITMQ_PASSWORD  string
 	MONGODB_URL string
-
+	PLATFORM_PASSWORD string
+	PLATFORM_USERNAME string
 	AMQP_URL string
 )
 
@@ -68,6 +69,11 @@ func InitEnv() {
 	host := os.Getenv("MONGODB_HOSTNAME")
 	port := "27017"
 	MONGODB_URL = fmt.Sprintf("mongodb://%s:%s@%s:%s", user, pass, host, port)
+
+	// platform env
+	PLATFORM_USERNAME = os.Getenv("PLATFORM_USERNAME")
+	PLATFORM_PASSWORD = os.Getenv("PLATFORM_PASSWORD")
+
 }
 
 func GetMongoURI() string {
