@@ -43,7 +43,7 @@ lint:
       codequality: gl-code-quality-report.json
     paths:
       - gl-code-quality-report.json
-  when: manual
+  # when: manual
 
 release-image:
   stage: Release
@@ -55,7 +55,7 @@ release-image:
   script:
     - docker build --compress -t $CI_REGISTRY_IMAGE/$CI_COMMIT_BRANCH:$CI_COMMIT_SHORT_SHA -f ./docker/Dockerfile .
     - docker push $CI_REGISTRY_IMAGE/$CI_COMMIT_BRANCH:$CI_COMMIT_SHORT_SHA
-  when: manual
+  # when: manual
 
 update_chart_manifest:
   stage: Update Chart
