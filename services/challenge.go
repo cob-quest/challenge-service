@@ -188,7 +188,7 @@ func StartChallenge(ch *amqp.Channel, ctx context.Context, msg []byte, routingKe
 image:
   registry: registry.gitlab.com
   repository: %s
-  pullPolicy: IfNotPresent
+  pullPolicy: Always
   tag: %s
 imagePullSecrets:
   - name: docker-registry-credentials
