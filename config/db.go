@@ -66,7 +66,7 @@ func InitIndexes(client *mongo.Client) {
 		log.Fatal(err)
 	}
 
-	log.Printf("Created Transaction Index %s\n", challengeIndexCreated)
+	log.Printf("Created Challenge Index %s\n", challengeIndexCreated)
 
 	// cob_attempt_1 index
 	attemptCollection := OpenCollection(client, "attempt")
@@ -92,7 +92,7 @@ func InitIndexes(client *mongo.Client) {
 		log.Fatal(err)
 	}
 
-	log.Printf("Created Transaction Index %s\n", attemptIndexCreated)
+	log.Printf("Created Attempt Index %s\n", attemptIndexCreated)
 
 }
 
