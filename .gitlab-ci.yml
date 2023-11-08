@@ -45,6 +45,21 @@ lint:
       - gl-code-quality-report.json
   # when: manual
 
+unit-test:
+  stage: Test
+  image: docker:24.0.2
+  services:
+    - docker:24.0.2-dind
+  script:
+    - docker build -f docker/Dockerfile.test -t challenge-service:test .
+    - docker run --name challenge-service-test-container challenge-service:test go test -v ./... > test-results.txt
+    - ls
+  artifacts:
+    when: always
+    paths:
+      - test-results.txt
+
+
 release-image:
   stage: Release
   image: docker:24.0.2
